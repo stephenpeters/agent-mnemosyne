@@ -30,7 +30,7 @@ class Dashboard:
         self.pipeline_dir = data_dir / "pipeline"
         self.memory_dir = data_dir / "memory"
 
-    def get_dashboard_data(self, agent_statuses: List[Dict], schedule: Dict, recent_jobs: List[Dict]) -> Dict:
+    def get_dashboard_data(self, agent_statuses: List[Dict], schedule: Dict, recent_jobs: List[Dict], notification_config: Dict = None) -> Dict:
         """
         Collect all dashboard data
 
@@ -38,6 +38,7 @@ class Dashboard:
             agent_statuses: List of agent health check results
             schedule: Current schedule configuration
             recent_jobs: Recent pipeline jobs
+            notification_config: Email notification configuration
 
         Returns:
             Dict with all dashboard data
@@ -65,6 +66,7 @@ class Dashboard:
             "system_health": system_health,
             "agents": agent_statuses,
             "schedule": schedule,
+            "notification_config": notification_config or {},
             "pipeline_stats": pipeline_stats,
             "recent_jobs": recent_jobs,
             "recent_pipelines": recent_pipelines,
@@ -357,6 +359,7 @@ class Dashboard:
         system_health = data["system_health"]
         agents = data["agents"]
         schedule = data["schedule"]
+        notification_config = data.get("notification_config", {})
         pipeline_stats = data["pipeline_stats"]
         recent_jobs = data["recent_jobs"]
         discovery_stats = data["discovery_stats"]
@@ -577,6 +580,42 @@ class Dashboard:
         button.danger:hover {{
             background: #c82333;
         }}
+        input[type="text"], input[type="email"], input[type="number"] {{
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 14px;
+        }}
+        input[type="checkbox"] {{
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            cursor: pointer;
+        }}
+        label {{
+            display: block;
+            margin: 10px 0 5px 0;
+            color: #999;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }}
+        .form-group {{
+            margin-bottom: 20px;
+        }}
+        .checkbox-group {{
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+        }}
+        button[type="submit"] {{
+            margin-top: 10px;
+        }}
     </style>
 </head>
 <body>
@@ -678,6 +717,56 @@ class Dashboard:
             </div>
         </div>
 
+        <!-- Settings Configuration -->
+        <div class="card" style="margin-bottom: 20px;">
+            <h2>⚙️ Settings</h2>
+            <div class="grid">
+                <!-- Scheduler Settings -->
+                <div>
+                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #667eea;">Schedule Timings</h3>
+                    <form id="schedulerForm" onsubmit="updateScheduler(event)">
+                        <div class="form-group">
+                            <label for="interval_hours">Discovery Interval (hours)</label>
+                            <input type="number" id="interval_hours" name="interval_hours" value="{schedule.get('interval_hours', 6)}" min="1" max="168" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="pipeline_interval_hours">Pipeline Interval (hours)</label>
+                            <input type="number" id="pipeline_interval_hours" name="pipeline_interval_hours" value="{schedule.get('pipeline_interval_hours', 24)}" min="1" max="168" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="num_ideas">Ideas per Pipeline Run</label>
+                            <input type="number" id="num_ideas" name="num_ideas" value="{schedule.get('num_ideas', 3)}" min="1" max="10" required>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="scheduler_enabled" name="enabled" {'checked' if schedule.get('enabled') else ''}>
+                            <label for="scheduler_enabled" style="margin: 0;">Enable Scheduler</label>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="review_required" name="review_required" {'checked' if schedule.get('review_required') else ''}>
+                            <label for="review_required" style="margin: 0;">Require Review</label>
+                        </div>
+                        <button type="submit">💾 Save Schedule Settings</button>
+                    </form>
+                </div>
+
+                <!-- Email Notification Settings -->
+                <div>
+                    <h3 style="font-size: 16px; margin-bottom: 15px; color: #667eea;">Email Notifications</h3>
+                    <form id="notificationForm" onsubmit="updateNotifications(event)">
+                        <div class="form-group">
+                            <label for="recipient_email">Recipient Email</label>
+                            <input type="email" id="recipient_email" name="recipient_email" value="{notification_config.get('recipient_email', 'mnemosyne@psc.net.au')}" required>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="email_enabled" name="email_enabled" {'checked' if notification_config.get('email_enabled', True) else ''}>
+                            <label for="email_enabled" style="margin: 0;">Enable Email Notifications</label>
+                        </div>
+                        <button type="submit">💾 Save Email Settings</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
         <!-- Recent Jobs -->
         <div class="card" style="margin-bottom: 20px;">
             <h2>📋 Recent Pipeline Jobs</h2>
@@ -732,6 +821,56 @@ class Dashboard:
                 .then(() => {{alert('Scheduler paused'); location.reload();}})
                 .catch(e => alert('Error: ' + e));
             }}
+        }}
+
+        function updateScheduler(event) {{
+            event.preventDefault();
+            const formData = new FormData(event.target);
+
+            const config = {{
+                enabled: formData.get('enabled') === 'on',
+                interval_hours: parseInt(formData.get('interval_hours')),
+                pipeline_enabled: true,
+                pipeline_interval_hours: parseInt(formData.get('pipeline_interval_hours')),
+                num_ideas: parseInt(formData.get('num_ideas')),
+                review_required: formData.get('review_required') === 'on',
+                daily_time: {json.dumps(schedule.get('daily_time'))},
+                days_of_week: {json.dumps(schedule.get('days_of_week'))}
+            }};
+
+            fetch('/v1/schedule', {{
+                method: 'PUT',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify(config)
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                alert('✓ Schedule settings saved!');
+                location.reload();
+            }})
+            .catch(e => alert('Error saving schedule: ' + e));
+        }}
+
+        function updateNotifications(event) {{
+            event.preventDefault();
+            const formData = new FormData(event.target);
+
+            const config = {{
+                email_enabled: formData.get('email_enabled') === 'on',
+                recipient_email: formData.get('recipient_email')
+            }};
+
+            fetch('/v1/notifications', {{
+                method: 'PUT',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify(config)
+            }})
+            .then(r => r.json())
+            .then(data => {{
+                alert('✓ Email settings saved!');
+                location.reload();
+            }})
+            .catch(e => alert('Error saving email settings: ' + e));
         }}
     </script>
 </body>

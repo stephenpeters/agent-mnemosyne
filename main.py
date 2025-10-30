@@ -786,8 +786,11 @@ async def get_dashboard():
     # Get recent jobs
     recent_jobs = [j.dict() for j in sorted(state.jobs.values(), key=lambda x: x.job_id, reverse=True)[:10]]
 
+    # Get notification config
+    notification_config = state.notification_config.dict() if state.notification_config else {}
+
     # Get dashboard data
-    data = dashboard.get_dashboard_data(agents, schedule, recent_jobs)
+    data = dashboard.get_dashboard_data(agents, schedule, recent_jobs, notification_config)
 
     # Generate HTML
     html = dashboard.generate_html_dashboard(data)
