@@ -125,6 +125,11 @@ class TriggerRequest(BaseModel):
     review_required: bool = True
     reason: Optional[str] = "manual"
 
+class NotificationConfig(BaseModel):
+    """Notification configuration"""
+    email_enabled: bool = True
+    recipient_email: str = "mnemosyne@psc.net.au"
+
 
 # ============================================================================
 # State Management
@@ -136,7 +141,9 @@ class MnemosyneState:
     def __init__(self):
         self.jobs: Dict[str, PipelineJob] = {}
         self.schedule: Optional[ScheduleConfig] = None
+        self.notification_config: Optional[NotificationConfig] = None
         self.load_schedule()
+        self.load_notification_config()
 
     def load_schedule(self):
         """Load schedule configuration"""
@@ -152,6 +159,21 @@ class MnemosyneState:
         """Save schedule configuration"""
         with open(SCHEDULE_DIR / "schedule.json", 'w') as f:
             json.dump(self.schedule.dict(), f, indent=2)
+
+    def load_notification_config(self):
+        """Load notification configuration"""
+        config_file = SCHEDULE_DIR / "notifications.json"
+        if config_file.exists():
+            with open(config_file, 'r') as f:
+                self.notification_config = NotificationConfig(**json.load(f))
+        else:
+            self.notification_config = NotificationConfig()
+            self.save_notification_config()
+
+    def save_notification_config(self):
+        """Save notification configuration"""
+        with open(SCHEDULE_DIR / "notifications.json", 'w') as f:
+            json.dump(self.notification_config.dict(), f, indent=2)
 
     def create_job(self, num_ideas: int, review_required: bool, reason: str) -> PipelineJob:
         """Create new job"""
@@ -699,6 +721,25 @@ def update_schedule(config: ScheduleConfig):
     state.save_schedule()
     update_scheduler()  # Restart scheduler with new config
     return {"status": "updated", "message": "Schedule updated and scheduler restarted"}
+
+
+@app.get("/v1/notifications")
+def get_notification_config():
+    """Get current notification configuration"""
+    return state.notification_config.dict()
+
+
+@app.put("/v1/notifications")
+def update_notification_config(config: NotificationConfig):
+    """Update notification configuration"""
+    state.notification_config = config
+    state.save_notification_config()
+
+    # Update notifier recipient
+    if notifier.enabled:
+        notifier.update_recipient(config.recipient_email)
+
+    return {"status": "updated", "message": "Notification settings updated"}
 
 
 @app.post("/v1/trigger")

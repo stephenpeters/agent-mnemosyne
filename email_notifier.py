@@ -22,14 +22,14 @@ logger = logging.getLogger(__name__)
 class EmailNotifier:
     """Send email notifications via Fastmail SMTP"""
 
-    def __init__(self):
+    def __init__(self, to_addr: Optional[str] = None):
         self.enabled = self._check_config()
         if self.enabled:
             self.smtp_server = "smtp.fastmail.com"
             self.smtp_port = 587
             self.from_addr = os.getenv("FASTMAIL_ADDRESS", "stephenp@fastmail.com.au")
             self.password = os.getenv("FASTMAIL_PASSWORD")
-            self.to_addr = "mnemosyne@psc.net.au"
+            self.to_addr = to_addr or os.getenv("NOTIFICATION_EMAIL", "mnemosyne@psc.net.au")
             logger.info(f"Email notifications enabled: {self.from_addr} → {self.to_addr}")
         else:
             logger.warning("Email notifications disabled - missing credentials")
@@ -37,6 +37,11 @@ class EmailNotifier:
     def _check_config(self) -> bool:
         """Check if email credentials are configured"""
         return bool(os.getenv("FASTMAIL_ADDRESS") and os.getenv("FASTMAIL_PASSWORD"))
+
+    def update_recipient(self, to_addr: str):
+        """Update the notification recipient email address"""
+        self.to_addr = to_addr
+        logger.info(f"Updated notification recipient to: {to_addr}")
 
     def send_pipeline_stats(self, stats: Dict):
         """
