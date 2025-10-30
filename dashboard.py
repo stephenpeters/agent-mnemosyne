@@ -192,44 +192,73 @@ class Dashboard:
         return stats
 
     def _get_error_summary(self) -> List[Dict]:
-        """Get error summary from logs"""
+        """Get error summary from logs and pipeline runs"""
 
         errors = defaultdict(int)
         error_details = []
 
-        if not self.logs_dir.exists():
-            return error_details
-
         # Check discovery logs
-        log_files = sorted(self.logs_dir.glob("discovery_*.log"), reverse=True)[:7]
+        if self.logs_dir.exists():
+            log_files = sorted(self.logs_dir.glob("discovery_*.log"), reverse=True)[:7]
 
-        for log_file in log_files:
-            try:
-                with open(log_file, 'r') as f:
-                    for line in f:
-                        if "ERROR" in line or "error:" in line.lower():
-                            # Categorize error
-                            if "401" in line:
-                                error_type = "Authentication Error (401)"
-                            elif "403" in line:
-                                error_type = "Forbidden/Quota Error (403)"
-                            elif "timeout" in line.lower():
-                                error_type = "Timeout Error"
-                            elif "scoring" in line.lower():
-                                error_type = "Scoring Error"
-                            else:
-                                error_type = "Other Error"
+            for log_file in log_files:
+                try:
+                    with open(log_file, 'r') as f:
+                        for line in f:
+                            if "ERROR" in line or "error:" in line.lower():
+                                # Categorize error
+                                if "401" in line:
+                                    error_type = "Authentication Error (401)"
+                                elif "403" in line:
+                                    error_type = "Forbidden/Quota Error (403)"
+                                elif "timeout" in line.lower():
+                                    error_type = "Timeout Error"
+                                elif "scoring" in line.lower():
+                                    error_type = "Scoring Error"
+                                else:
+                                    error_type = "Other Error"
 
-                            errors[error_type] += 1
+                                errors[error_type] += 1
 
-                            if len(error_details) < 20:
-                                error_details.append({
-                                    "date": datetime.fromtimestamp(log_file.stat().st_mtime).strftime("%Y-%m-%d"),
-                                    "type": error_type,
-                                    "message": line.strip()[:200]
-                                })
-            except Exception as e:
-                logger.error(f"Error reading log {log_file}: {e}")
+                                if len(error_details) < 20:
+                                    error_details.append({
+                                        "date": datetime.fromtimestamp(log_file.stat().st_mtime).strftime("%Y-%m-%d"),
+                                        "type": error_type,
+                                        "message": line.strip()[:200]
+                                    })
+                except Exception as e:
+                    logger.error(f"Error reading log {log_file}: {e}")
+
+        # Check pipeline runs for processing errors
+        if self.pipeline_dir.exists():
+            cutoff = datetime.now() - timedelta(days=7)
+            pipeline_files = [f for f in self.pipeline_dir.glob("pipeline_*.json")
+                            if datetime.fromtimestamp(f.stat().st_mtime) > cutoff]
+
+            for pf in pipeline_files:
+                try:
+                    with open(pf, 'r') as f:
+                        data = json.load(f)
+                        processed_ideas = data.get("ideas_processed", [])
+
+                        for idea in processed_ideas:
+                            if idea.get("status") == "error":
+                                error_msg = idea.get("error", "Unknown error")
+
+                                # Categorize pipeline error
+                                if "draft" in error_msg.lower():
+                                    error_type = "Draft Generation Error"
+                                elif "clean" in error_msg.lower():
+                                    error_type = "Cleaning/Authenticity Error"
+                                elif "quality" in error_msg.lower():
+                                    error_type = "Quality Check Failed"
+                                else:
+                                    error_type = "Pipeline Processing Error"
+
+                                errors[error_type] += 1
+
+                except Exception as e:
+                    logger.error(f"Error reading pipeline file {pf}: {e}")
 
         # Convert to list sorted by count
         return [{"type": k, "count": v} for k, v in sorted(errors.items(), key=lambda x: x[1], reverse=True)]
