@@ -754,6 +754,136 @@ async def get_dashboard():
     return html
 
 
+@app.get("/v1/ideas/all", response_class=HTMLResponse)
+async def get_all_ideas():
+    """
+    View all processed ideas from pipeline runs
+
+    Returns HTML page with complete history of all ideas processed
+    through the pipeline with their metrics.
+    """
+    # Get all ideas (no limit)
+    all_ideas = dashboard._get_recent_ideas(limit=1000)
+
+    # Generate HTML for full ideas list
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Processed Ideas - Mnemosyne</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+            line-height: 1.6;
+        }}
+        .container {{
+            max-width: 1800px;
+            margin: 0 auto;
+        }}
+        header {{
+            background: linear-gradient(135deg, #2E3440 0%, #3B4252 100%);
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }}
+        h1 {{
+            font-size: 36px;
+            margin-bottom: 10px;
+            color: white;
+        }}
+        .back-link {{
+            display: inline-block;
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }}
+        .back-link:hover {{
+            background: #764ba2;
+        }}
+        .card {{
+            background: #2a2a2a;
+            padding: 24px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            border: 1px solid #3a3a3a;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }}
+        th {{
+            text-align: left;
+            padding: 12px;
+            background: #333;
+            font-weight: 600;
+            color: #999;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }}
+        td {{
+            padding: 12px;
+            border-bottom: 1px solid #3a3a3a;
+            color: #e0e0e0;
+        }}
+        tr:hover {{
+            background: #333;
+        }}
+        .status-badge {{
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }}
+        .badge-success {{ background: #28a745; color: white; }}
+        .summary {{
+            color: #999;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💡 All Processed Ideas</h1>
+            <a href="/dashboard" class="back-link">← Back to Dashboard</a>
+        </header>
+
+        <div class="card">
+            <div class="summary">
+                Showing all {len(all_ideas)} ideas processed through the pipeline
+            </div>
+            {dashboard._render_ideas_html(all_ideas)}
+        </div>
+    </div>
+</body>
+</html>"""
+
+    return html
+
+
 @app.post("/v1/discovery/trigger")
 async def trigger_discovery(bg: BackgroundTasks):
     """

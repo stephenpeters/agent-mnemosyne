@@ -55,7 +55,7 @@ class Dashboard:
         discovery_stats = self._get_discovery_stats()
 
         # Get recent pipeline runs with ideas
-        recent_pipelines = self._get_recent_pipelines(limit=10)
+        recent_pipelines = self._get_recent_pipelines(limit=5)
 
         # Get recent ideas processed
         recent_ideas = self._get_recent_ideas(limit=20)
@@ -684,15 +684,15 @@ class Dashboard:
             {self._render_jobs_table_html(recent_jobs)}
         </div>
 
-        <!-- Recent Pipeline Runs -->
+        <!-- Recent Pipeline Runs (last 5) -->
         <div class="card" style="margin-bottom: 20px;">
-            <h2>🔄 Recent Pipeline Runs</h2>
+            <h2>🔄 Recent Pipeline Runs (Last 5)</h2>
             {self._render_pipelines_html(data.get('recent_pipelines', []))}
         </div>
 
-        <!-- Recent Ideas Processed -->
+        <!-- Recent Ideas Processed (last 20) -->
         <div class="card" style="margin-bottom: 20px;">
-            <h2>💡 Recent Ideas Processed</h2>
+            <h2>💡 Recent Ideas Processed (Last 20)</h2>
             {self._render_ideas_html(data.get('recent_ideas', []))}
         </div>
 
@@ -808,7 +808,7 @@ class Dashboard:
 
         html = '<table><thead><tr><th>Run ID</th><th>Started</th><th>Ideas</th><th>Success</th><th>Failed</th></tr></thead><tbody>'
 
-        for p in pipelines[:10]:
+        for p in pipelines[:5]:
             started = p.get('started_at', 'N/A')
             if started and len(started) > 19:
                 started = started[:19]
@@ -833,7 +833,14 @@ class Dashboard:
         if not ideas:
             return '<p style="color: #666;">No recent ideas processed</p>'
 
-        html = '<table><thead><tr><th>Title</th><th>Source</th><th>Words</th><th>AI Before</th><th>AI After</th><th>Voice Dev</th><th>Status</th></tr></thead><tbody>'
+        total_ideas = len(ideas)
+        html = ''
+
+        # Add "View All" link if there are more ideas
+        if total_ideas > 20:
+            html += f'<div style="margin-bottom: 10px; color: #667eea;"><a href="/v1/ideas/all" style="color: #667eea; text-decoration: none; font-weight: 600;">📊 View All {total_ideas} Ideas</a></div>'
+
+        html += '<table><thead><tr><th>Title</th><th>Source</th><th>Words</th><th>AI Before</th><th>AI After</th><th>Voice Dev</th><th>Status</th></tr></thead><tbody>'
 
         for idea in ideas[:20]:
             title = idea.get('title', 'Untitled')
