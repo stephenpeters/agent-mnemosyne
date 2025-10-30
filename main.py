@@ -946,6 +946,174 @@ async def get_discovery_stats():
     return stats
 
 
+@app.get("/v1/discovery/ideas", response_class=HTMLResponse)
+async def get_discovered_ideas():
+    """
+    View all discovered ideas from Aletheia
+
+    Returns HTML page with all ideas discovered by the discovery agent,
+    including title, source, score, and content preview.
+    """
+    # Read daily-ideas.json
+    daily_ideas_file = DATA_DIR / "daily-ideas.json"
+
+    if not daily_ideas_file.exists():
+        return "<html><body><h1>No discovered ideas found</h1><p>Run discovery first.</p></body></html>"
+
+    try:
+        with open(daily_ideas_file, 'r') as f:
+            data = json.load(f)
+
+        ideas = data.get("ideas", [])
+        total = data.get("total_discovered", 0)
+        generated_at = data.get("generated_at", "Unknown")
+
+        # Generate HTML table
+        ideas_html = '<table style="width: 100%; border-collapse: collapse; font-size: 14px;">'
+        ideas_html += '''<thead><tr style="background: #333; color: #999;">
+            <th style="padding: 12px; text-align: left;">Title</th>
+            <th style="padding: 12px; text-align: left;">Source</th>
+            <th style="padding: 12px; text-align: center;">Score</th>
+            <th style="padding: 12px; text-align: left;">Preview</th>
+        </tr></thead><tbody>'''
+
+        for idea in ideas:
+            title = idea.get("title", "Untitled")
+            source = idea.get("source", "Unknown")
+            score = idea.get("score", 0)
+            content = idea.get("content", "")[:200] + "..." if len(idea.get("content", "")) > 200 else idea.get("content", "")
+            source_url = idea.get("source_url", "#")
+
+            # Color code score
+            if score >= 0.7:
+                score_color = "#28a745"
+            elif score >= 0.5:
+                score_color = "#ffc107"
+            else:
+                score_color = "#dc3545"
+
+            ideas_html += f'''<tr style="border-bottom: 1px solid #3a3a3a;">
+                <td style="padding: 12px;"><a href="{source_url}" target="_blank" style="color: #667eea; text-decoration: none;">{title}</a></td>
+                <td style="padding: 12px;">{source}</td>
+                <td style="padding: 12px; text-align: center; color: {score_color}; font-weight: bold;">{score:.2f}</td>
+                <td style="padding: 12px; color: #999; font-size: 12px;">{content}</td>
+            </tr>'''
+
+        ideas_html += '</tbody></table>'
+
+        html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discovered Ideas - Mnemosyne</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+            line-height: 1.6;
+        }}
+        .container {{
+            max-width: 1800px;
+            margin: 0 auto;
+        }}
+        header {{
+            background: linear-gradient(135deg, #2E3440 0%, #3B4252 100%);
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }}
+        h1 {{
+            font-size: 36px;
+            margin-bottom: 10px;
+            color: white;
+        }}
+        .back-link {{
+            display: inline-block;
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }}
+        .back-link:hover {{
+            background: #764ba2;
+        }}
+        .card {{
+            background: #2a2a2a;
+            padding: 24px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            border: 1px solid #3a3a3a;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }}
+        th {{
+            text-align: left;
+            padding: 12px;
+            background: #333;
+            font-weight: 600;
+            color: #999;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }}
+        td {{
+            padding: 12px;
+            border-bottom: 1px solid #3a3a3a;
+            color: #e0e0e0;
+        }}
+        tr:hover {{
+            background: #333;
+        }}
+        .summary {{
+            color: #999;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 Discovered Ideas (Aletheia)</h1>
+            <a href="/dashboard" class="back-link">← Back to Dashboard</a>
+        </header>
+
+        <div class="card">
+            <div class="summary">
+                Showing all {total} ideas discovered • Last updated: {generated_at}
+            </div>
+            {ideas_html}
+        </div>
+    </div>
+</body>
+</html>"""
+
+        return html
+
+    except Exception as e:
+        logger.error(f"Error reading discovered ideas: {e}")
+        return f"<html><body><h1>Error</h1><p>{str(e)}</p></body></html>"
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8005)

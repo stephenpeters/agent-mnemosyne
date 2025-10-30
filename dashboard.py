@@ -697,7 +697,11 @@ class Dashboard:
                 <h2>🔍 Discovery Status</h2>
                 <div class="stat">
                     <span class="stat-label">Total Ideas</span>
-                    <span class="stat-value">{discovery_stats['total_ideas_discovered']}</span>
+                    <span class="stat-value">
+                        <a href="/v1/discovery/ideas" style="color: #667eea; text-decoration: none; font-weight: 600;">
+                            {discovery_stats['total_ideas_discovered']} →
+                        </a>
+                    </span>
                 </div>
                 <div class="stat">
                     <span class="stat-label">Runs (7 days)</span>
