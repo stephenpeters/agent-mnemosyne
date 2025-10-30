@@ -1008,7 +1008,22 @@ class Dashboard:
         if total_ideas > 20:
             html += f'<div style="margin-bottom: 10px; color: #667eea;"><a href="/v1/ideas/all" style="color: #667eea; text-decoration: none; font-weight: 600;">📊 View All {total_ideas} Ideas</a></div>'
 
-        html += '<table><thead><tr><th>Title</th><th>Source</th><th>Words</th><th>AI Before</th><th>AI After</th><th>Voice Dev</th><th>Status</th></tr></thead><tbody>'
+        # Reorganized to follow pipeline stages: Discovery → Drafting → Cleaning → Result
+        html += '''<table><thead><tr>
+            <th colspan="2" style="background: #2a4a7f; color: #fff;">📥 Discovery (Aletheia)</th>
+            <th style="background: #4a2a7f; color: #fff;">✍️ Draft (IRIS)</th>
+            <th colspan="3" style="background: #7f2a4a; color: #fff;">🧹 Clean (Erebus)</th>
+            <th style="background: #2a7f4a; color: #fff;">✅ Result</th>
+        </tr>
+        <tr>
+            <th>Title</th>
+            <th>Source</th>
+            <th>Words</th>
+            <th>AI Before</th>
+            <th>AI After</th>
+            <th>Voice Dev</th>
+            <th>Status</th>
+        </tr></thead><tbody>'''
 
         for idea in ideas[:20]:
             title = idea.get('title', 'Untitled')
@@ -1028,6 +1043,7 @@ class Dashboard:
             # Color coding for metrics
             ai_after_color = '#28a745' if ai_after < 0.25 else '#ffc107' if ai_after < 0.4 else '#dc3545'
             voice_color = '#28a745' if voice_dev < 0.35 else '#ffc107' if voice_dev < 0.5 else '#dc3545'
+            status_badge = 'badge-success' if status == 'success' else 'badge-error'
 
             html += f'''<tr>
                 <td title="{idea.get('title', 'Untitled')}">{title}</td>
@@ -1036,7 +1052,7 @@ class Dashboard:
                 <td>{ai_before:.2f}</td>
                 <td style="color: {ai_after_color};"><strong>{ai_after:.2f}</strong></td>
                 <td style="color: {voice_color};"><strong>{voice_dev:.2f}</strong></td>
-                <td><span class="badge-success status-badge">{status}</span></td>
+                <td><span class="{status_badge} status-badge">{status}</span></td>
             </tr>'''
 
         html += '</tbody></table>'
