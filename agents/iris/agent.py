@@ -234,7 +234,22 @@ Output format (JSON):
             )
 
             # Extract JSON from response
-            response_text = message.content[0].text
+            # Debug: log the raw response
+            logger.debug(f"Raw message object: {message}")
+            logger.debug(f"Content type: {type(message.content)}")
+            logger.debug(f"Content: {message.content}")
+
+            # Handle different response formats
+            if isinstance(message.content, list) and len(message.content) > 0:
+                content_block = message.content[0]
+                if hasattr(content_block, 'text'):
+                    response_text = content_block.text
+                else:
+                    response_text = str(content_block)
+            else:
+                response_text = str(message.content)
+
+            logger.debug(f"Extracted response_text: {response_text[:500]}")
 
             # Try to extract JSON (Claude might wrap it in markdown)
             if "```json" in response_text:
@@ -243,6 +258,11 @@ Output format (JSON):
                 json_str = response_text.split("```")[1].split("```")[0].strip()
             else:
                 json_str = response_text
+
+            logger.debug(f"Extracted json_str: {json_str[:500] if json_str else 'EMPTY!'}")
+
+            if not json_str or json_str.isspace():
+                raise ValueError(f"Empty JSON string extracted from response. Full response: {response_text}")
 
             outline_data = json.loads(json_str)
 
