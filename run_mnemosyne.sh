@@ -3,8 +3,10 @@
 
 cd "$(dirname "$0")"
 
-# Set data directory
-export MNEMOSYNE_DATA_DIR="/Users/stephenpeters/Library/CloudStorage/Dropbox/Mnemosyne"
+# Load environment variables from .env file
+if [ -f ".env" ]; then
+    export $(grep -v '^#' .env | xargs)
+fi
 
 # Check if virtual environment exists
 if [ ! -d ".venv" ]; then
