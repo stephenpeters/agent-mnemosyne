@@ -86,13 +86,11 @@ QUALITY_THRESHOLDS = {
 # Initialize dashboard
 dashboard = Dashboard(DATA_DIR)
 
-# Initialize consolidated agents
-logger.info("Initializing consolidated agents...")
-aletheia = AletheiaAgent(DATA_DIR)
-iris = IrisAgent(DATA_DIR)
-erebus = ErebusAgent(DATA_DIR)
-kairos = KairosAgent(DATA_DIR)
-logger.info("✓ All agents initialized (consolidated single-process deployment)")
+# Consolidated agents (initialized on startup to avoid blocking module import)
+aletheia = None
+iris = None
+erebus = None
+kairos = None
 
 
 # ============================================================================
@@ -653,8 +651,19 @@ async def get_system_status():
 
 @app.on_event("startup")
 async def startup():
-    """Start scheduler"""
+    """Start scheduler and initialize agents"""
+    global aletheia, iris, erebus, kairos
+
     logger.info("Mnemosyne starting - Memory, Governance & Orchestration")
+
+    # Initialize consolidated agents
+    logger.info("Initializing consolidated agents...")
+    aletheia = AletheiaAgent(DATA_DIR)
+    iris = IrisAgent(DATA_DIR)
+    erebus = ErebusAgent(DATA_DIR)
+    kairos = KairosAgent(DATA_DIR)
+    logger.info("✓ All agents initialized (consolidated single-process deployment)")
+
     start_scheduler()
 
 
