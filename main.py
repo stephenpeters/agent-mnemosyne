@@ -601,15 +601,31 @@ def update_scheduler():
 # ============================================================================
 
 async def check_agent_health(url: str, name: str) -> Dict:
-    """Check agent health"""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{url}/healthz", timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                if resp.status == 200:
-                    return {"agent": name, "status": "healthy", "url": url}
-                return {"agent": name, "status": "unhealthy", "url": url}
-    except:
-        return {"agent": name, "status": "down", "url": url}
+    """
+    Check agent health
+
+    In consolidated mode, agents run as modules in this process.
+    We check if the agent module is initialized instead of HTTP endpoints.
+    """
+    # Map agent names to their module instances
+    agent_modules = {
+        "aletheia": aletheia,
+        "iris": iris,
+        "erebus": erebus,
+        "kairos": kairos
+    }
+
+    # Check if consolidated agent is initialized
+    if name in agent_modules and agent_modules[name] is not None:
+        return {
+            "agent": name.upper(),
+            "status": "healthy",
+            "url": "consolidated (in-process)",
+            "mode": "consolidated"
+        }
+
+    # Fallback: Not initialized yet or microservice mode
+    return {"agent": name, "status": "down", "url": url, "mode": "microservice"}
 
 
 @app.get("/v1/status")
