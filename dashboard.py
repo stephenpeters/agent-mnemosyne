@@ -54,6 +54,12 @@ class Dashboard:
         # Get discovery stats
         discovery_stats = self._get_discovery_stats()
 
+        # Get recent pipeline runs with ideas
+        recent_pipelines = self._get_recent_pipelines(limit=10)
+
+        # Get recent ideas processed
+        recent_ideas = self._get_recent_ideas(limit=20)
+
         return {
             "timestamp": datetime.now().isoformat(),
             "system_health": system_health,
@@ -61,6 +67,8 @@ class Dashboard:
             "schedule": schedule,
             "pipeline_stats": pipeline_stats,
             "recent_jobs": recent_jobs,
+            "recent_pipelines": recent_pipelines,
+            "recent_ideas": recent_ideas,
             "discovery_stats": discovery_stats,
             "error_summary": error_summary
         }
@@ -260,6 +268,80 @@ class Dashboard:
                 stats["avg_ideas_per_run"] = stats["total_ideas_discovered"] / stats["discovery_runs_7d"]
 
         return stats
+
+    def _get_recent_pipelines(self, limit: int = 10) -> List[Dict]:
+        """Get recent pipeline runs with summary info"""
+        pipelines = []
+
+        if not self.pipeline_dir.exists():
+            return pipelines
+
+        # Get recent pipeline files
+        pipeline_files = sorted(self.pipeline_dir.glob("pipeline_*.json"), reverse=True)[:limit]
+
+        for pf in pipeline_files:
+            try:
+                with open(pf, 'r') as f:
+                    data = json.load(f)
+
+                    pipelines.append({
+                        "run_id": data.get("run_id", pf.stem),
+                        "started_at": data.get("started_at", ""),
+                        "completed_at": data.get("completed_at", ""),
+                        "num_ideas": data.get("num_ideas", 0),
+                        "successes": data.get("successes", 0),
+                        "failures": data.get("failures", 0),
+                        "ideas": data.get("ideas_processed", [])
+                    })
+            except Exception as e:
+                logger.error(f"Error reading pipeline file {pf}: {e}")
+
+        return pipelines
+
+    def _get_recent_ideas(self, limit: int = 20) -> List[Dict]:
+        """Get recently processed ideas from pipeline runs"""
+        ideas = []
+
+        if not self.pipeline_dir.exists():
+            return ideas
+
+        # Get recent pipeline files
+        pipeline_files = sorted(self.pipeline_dir.glob("pipeline_*.json"), reverse=True)[:10]
+
+        for pf in pipeline_files:
+            try:
+                with open(pf, 'r') as f:
+                    data = json.load(f)
+                    processed_ideas = data.get("ideas_processed", [])
+
+                    for idea in processed_ideas:
+                        if len(ideas) >= limit:
+                            break
+
+                        # Extract key info
+                        idea_data = idea.get("idea", {})
+                        draft = idea.get("draft", {})
+                        cleaned = idea.get("cleaned", {})
+
+                        ideas.append({
+                            "title": idea_data.get("title", "Untitled"),
+                            "source": idea_data.get("source", "Unknown"),
+                            "url": idea_data.get("url", ""),
+                            "processed_at": data.get("started_at", ""),
+                            "word_count": draft.get("word_count", 0),
+                            "ai_likelihood_before": cleaned.get("ai_likelihood_before", 0),
+                            "ai_likelihood_after": cleaned.get("ai_likelihood_after", 0),
+                            "voice_deviation": cleaned.get("voice_deviation", 0),
+                            "status": idea.get("status", "unknown")
+                        })
+
+                    if len(ideas) >= limit:
+                        break
+
+            except Exception as e:
+                logger.error(f"Error reading pipeline file {pf}: {e}")
+
+        return ideas
 
     def generate_html_dashboard(self, data: Dict) -> str:
         """
@@ -602,6 +684,18 @@ class Dashboard:
             {self._render_jobs_table_html(recent_jobs)}
         </div>
 
+        <!-- Recent Pipeline Runs -->
+        <div class="card" style="margin-bottom: 20px;">
+            <h2>🔄 Recent Pipeline Runs</h2>
+            {self._render_pipelines_html(data.get('recent_pipelines', []))}
+        </div>
+
+        <!-- Recent Ideas Processed -->
+        <div class="card" style="margin-bottom: 20px;">
+            <h2>💡 Recent Ideas Processed</h2>
+            {self._render_ideas_html(data.get('recent_ideas', []))}
+        </div>
+
         <!-- Error Summary -->
         <div class="card">
             <h2>⚠️ Error Summary (Last 7 Days)</h2>
@@ -704,5 +798,71 @@ class Dashboard:
                 <td>{error['type']}</td>
                 <td><strong style="color: #dc3545;">{error['count']}</strong></td>
             </tr>'''
+        html += '</tbody></table>'
+        return html
+
+    def _render_pipelines_html(self, pipelines: List[Dict]) -> str:
+        """Render recent pipeline runs"""
+        if not pipelines:
+            return '<p style="color: #666;">No recent pipeline runs</p>'
+
+        html = '<table><thead><tr><th>Run ID</th><th>Started</th><th>Ideas</th><th>Success</th><th>Failed</th></tr></thead><tbody>'
+
+        for p in pipelines[:10]:
+            started = p.get('started_at', 'N/A')
+            if started and len(started) > 19:
+                started = started[:19]
+
+            num_ideas = p.get('num_ideas', 0)
+            successes = p.get('successes', 0)
+            failures = p.get('failures', 0)
+
+            html += f'''<tr>
+                <td style="font-family: monospace; font-size: 11px;">{p.get('run_id', 'N/A')[:20]}...</td>
+                <td>{started}</td>
+                <td>{num_ideas}</td>
+                <td style="color: #28a745;"><strong>{successes}</strong></td>
+                <td style="color: #dc3545;"><strong>{failures}</strong></td>
+            </tr>'''
+
+        html += '</tbody></table>'
+        return html
+
+    def _render_ideas_html(self, ideas: List[Dict]) -> str:
+        """Render recently processed ideas"""
+        if not ideas:
+            return '<p style="color: #666;">No recent ideas processed</p>'
+
+        html = '<table><thead><tr><th>Title</th><th>Source</th><th>Words</th><th>AI Before</th><th>AI After</th><th>Voice Dev</th><th>Status</th></tr></thead><tbody>'
+
+        for idea in ideas[:20]:
+            title = idea.get('title', 'Untitled')
+            if len(title) > 50:
+                title = title[:47] + '...'
+
+            source = idea.get('source', 'Unknown')
+            if len(source) > 20:
+                source = source[:17] + '...'
+
+            word_count = idea.get('word_count', 0)
+            ai_before = idea.get('ai_likelihood_before', 0)
+            ai_after = idea.get('ai_likelihood_after', 0)
+            voice_dev = idea.get('voice_deviation', 0)
+            status = idea.get('status', 'unknown')
+
+            # Color coding for metrics
+            ai_after_color = '#28a745' if ai_after < 0.25 else '#ffc107' if ai_after < 0.4 else '#dc3545'
+            voice_color = '#28a745' if voice_dev < 0.35 else '#ffc107' if voice_dev < 0.5 else '#dc3545'
+
+            html += f'''<tr>
+                <td title="{idea.get('title', 'Untitled')}">{title}</td>
+                <td>{source}</td>
+                <td>{word_count}</td>
+                <td>{ai_before:.2f}</td>
+                <td style="color: {ai_after_color};"><strong>{ai_after:.2f}</strong></td>
+                <td style="color: {voice_color};"><strong>{voice_dev:.2f}</strong></td>
+                <td><span class="badge-success status-badge">{status}</span></td>
+            </tr>'''
+
         html += '</tbody></table>'
         return html
