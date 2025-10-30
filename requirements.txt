@@ -3,3 +3,10 @@ uvicorn==0.38.0
 pydantic==2.12.3
 aiohttp==3.11.11
 apscheduler==3.10.4
+anthropic>=0.40.0
+
+# From Aletheia
+pyyaml>=6.0
+feedparser>=6.0.10
+requests>=2.31.0
+duckduckgo-search>=6.0.0

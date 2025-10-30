@@ -33,6 +33,12 @@ from apscheduler.triggers.interval import IntervalTrigger
 from dashboard import Dashboard
 from email_notifier import notifier
 
+# Import consolidated agents
+from agents.iris import IrisAgent, IdeaInput as IrisIdeaInput, DraftRequest
+from agents.erebus import ErebusAgent, DraftInput as ErebusDraftInput
+from agents.aletheia import AletheiaAgent
+from agents.kairos import KairosAgent
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -79,6 +85,14 @@ QUALITY_THRESHOLDS = {
 
 # Initialize dashboard
 dashboard = Dashboard(DATA_DIR)
+
+# Initialize consolidated agents
+logger.info("Initializing consolidated agents...")
+aletheia = AletheiaAgent(DATA_DIR)
+iris = IrisAgent(DATA_DIR)
+erebus = ErebusAgent(DATA_DIR)
+kairos = KairosAgent(DATA_DIR)
+logger.info("✓ All agents initialized (consolidated single-process deployment)")
 
 
 # ============================================================================
@@ -268,37 +282,53 @@ async def process_idea(session: aiohttp.ClientSession, idea: Dict, review_requir
     """
     Process single idea through pipeline
 
-    Each agent call is synchronous - returns when complete ✓
+    Now using direct function calls instead of HTTP (consolidated agents)
     """
     result = {"idea": idea, "status": "processing"}
 
     try:
         # Step 1: IRIS Outline
         logger.info("  [1/4] IRIS: Generating outline...")
-        outline = await call_iris_outline(session, idea)
-        result["outline"] = outline
-        logger.info(f"  ✓ Outline: {outline['outline_id']}")
-        # Agent returned = completed ✓
+        idea_input = IrisIdeaInput(
+            title=idea.get("title", ""),
+            content=idea.get("snippet", ""),
+            url=idea.get("url"),
+            source=idea.get("source"),
+            score=idea.get("score")
+        )
+        outline = iris.generate_outline(idea_input)
+        result["outline"] = outline.dict()
+        logger.info(f"  ✓ Outline: {outline.outline_id}")
 
         # Step 2: IRIS Draft
         logger.info("  [2/4] IRIS: Generating draft...")
-        draft = await call_iris_draft(session, outline, idea)
-        result["draft"] = draft
-        logger.info(f"  ✓ Draft: {draft['draft_id']} ({draft['word_count']} words)")
-        # Agent returned = completed ✓
+        draft_request = DraftRequest(
+            outline_id=outline.outline_id,
+            idea=idea_input,
+            target_length=800
+        )
+        draft = iris.generate_draft(draft_request)
+        result["draft"] = draft.dict()
+        logger.info(f"  ✓ Draft: {draft.draft_id} ({draft.word_count} words)")
 
         # Step 3: Erebus Clean
         logger.info("  [3/4] Erebus: Cleaning...")
-        cleaned = await call_erebus_clean(session, draft)
-        result["cleaned"] = cleaned
-        logger.info(f"  ✓ Cleaned: {cleaned['cleaned_id']}")
-        logger.info(f"    AI: {cleaned['ai_likelihood_before']:.2f} → {cleaned['ai_likelihood_after']:.2f}")
-        logger.info(f"    Voice: {cleaned['voice_deviation']:.2f}")
-        # Agent returned = completed ✓
+        draft_input = ErebusDraftInput(
+            draft_id=draft.draft_id,
+            title=draft.title,
+            content=draft.content,
+            word_count=draft.word_count,
+            metadata=draft.metadata
+        )
+        cleaned = erebus.clean_draft(draft_input)
+        result["cleaned"] = cleaned.dict()
+        logger.info(f"  ✓ Cleaned: {cleaned.cleaned_id}")
+        logger.info(f"    AI: {cleaned.ai_likelihood_before:.2f} → {cleaned.ai_likelihood_after:.2f}")
+        logger.info(f"    Voice: {cleaned.voice_deviation:.2f}")
 
         # Governance: Check quality
-        quality_pass = (cleaned['ai_likelihood_after'] <= QUALITY_THRESHOLDS["max_ai_likelihood"] and
-                       cleaned['voice_deviation'] <= QUALITY_THRESHOLDS["max_voice_deviation"])
+        quality_pass = (cleaned.ai_likelihood_after <= QUALITY_THRESHOLDS["max_ai_likelihood"] and
+                       cleaned.voice_deviation <= QUALITY_THRESHOLDS["max_voice_deviation"])
 
         if not quality_pass:
             logger.warning("  ⚠️  Quality check failed")
@@ -309,9 +339,14 @@ async def process_idea(session: aiohttp.ClientSession, idea: Dict, review_requir
             result["queued"] = {"status": "pending_review"}
         else:
             logger.info("  [4/4] Kairos: Queueing...")
-            queued = await call_kairos_queue(session, cleaned)
-            result["queued"] = queued
-            # Agent returned = completed ✓
+            queued_result = kairos.queue_for_publishing({
+                "draft_id": draft.draft_id,
+                "cleaned_id": cleaned.cleaned_id,
+                "title": cleaned.title,
+                "cleaned_content": cleaned.cleaned_content,
+                "metadata": cleaned.metadata
+            })
+            result["queued"] = queued_result
 
         result["status"] = "success"
         logger.info(f"  ✅ Complete")
